@@ -1,0 +1,35 @@
+name: ghibiri-home
+
+services:
+  ghibiri-home:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghibiri-home:1.0.0
+    container_name: ghibiri-home
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+      TZ: Europe/Rome
+      NODE_ENV: production
+    ports:
+      - "${APP_PORT:-3080}:3000"
+    volumes:
+      - ./data:/data
+    mem_limit: 384m
+    cpus: 1.0
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

@@ -1,0 +1,15 @@
+﻿node_modules/
+dist/
+.npm-cache/
+data/
+data-first/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.screens/
+.browser-profile*/
+.mail-out/
+.test-backup.zip
+.tmp-*

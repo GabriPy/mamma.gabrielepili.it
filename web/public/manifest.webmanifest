@@ -1,0 +1,22 @@
+{
+  "name": "Ghibiri Home — la casa di famiglia",
+  "short_name": "Ghibiri",
+  "description": "Calendario, spesa, scadenze, ricette e piante di casa in un unico posto privato.",
+  "lang": "it",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F7F1E7",
+  "theme_color": "#C0553A",
+  "categories": ["lifestyle", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Aggiungi alla spesa", "short_name": "Spesa", "url": "/spesa?nuovo=1", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Nuova scadenza", "short_name": "Scadenza", "url": "/scadenze?nuovo=1", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
