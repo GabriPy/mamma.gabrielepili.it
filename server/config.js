@@ -49,6 +49,17 @@ export const config = {
   maxUploadMb: int(process.env.MAX_UPLOAD_MB, 15),
   maxAttachmentsPerItem: int(process.env.MAX_ATTACHMENTS, 12),
   reminderHour: process.env.REMINDER_HOUR || '09:00',
+  ai: {
+    baseUrl: (process.env.AI_BASE_URL || '').replace(/\/+$/, ''),
+    apiKey: process.env.AI_API_KEY || '',
+    model: process.env.AI_MODEL || '',
+    timeoutMs: int(process.env.AI_TIMEOUT_MS, 45000),
+    maxTokens: int(process.env.AI_MAX_TOKENS, 1600),
+    temperature: Number(process.env.AI_TEMPERATURE || 0.85),
+    jsonMode: ['off', 'object', 'schema'].includes(String(process.env.AI_JSON_MODE || '').toLowerCase())
+      ? String(process.env.AI_JSON_MODE).toLowerCase()
+      : 'object',
+  },
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: int(process.env.SMTP_PORT, 587),
@@ -71,6 +82,10 @@ export const config = {
 
 export function smtpConfigured() {
   return Boolean(config.smtp.host);
+}
+
+export function aiConfigured() {
+  return Boolean(config.ai.baseUrl && config.ai.model);
 }
 
 fs.mkdirSync(config.uploadsDir, { recursive: true });

@@ -38,6 +38,18 @@ async function login(userId, pin) {
 }
 
 const results = [];
+async function waitForAiJob(jobId, timeoutMs = 30000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const state = await call(`/api/ai/recipes/jobs/${jobId}`);
+    if (state.status !== 200) throw new Error(`job ${jobId}: HTTP ${state.status}`);
+    if (state.data.status === 'done') return state.data.result;
+    if (state.data.status === 'error') throw new Error(state.data.error?.message || 'job error');
+  }
+  throw new Error('job timeout');
+}
+
 async function step(name, fn) {
   try {
     await fn();
@@ -156,6 +168,52 @@ async function main() {
       await call(`/api/shopping/items/${item.id}`, { method: 'DELETE' });
     }
     await call(`/api/recipes/${id}`, { method: 'DELETE' });
+  });
+
+  await step('ricetta generata con AI (se configurata)', async () => {
+    const status = await call('/api/ai/status');
+    if (!status.data?.ai?.configured) {
+      console.log('  (AI non configurata: salto la generazione)');
+      return;
+    }
+    const generated = await call('/api/ai/recipes/generate', {
+      method: 'POST',
+      body: { prompt: 'Ho zucchine e pasta, qualcosa di veloce', servings: 2, maxMinutes: 30 },
+    });
+    assert.equal(generated.status, 202, JSON.stringify(generated.data));
+    assert.ok(generated.data.jobId);
+    const generatedResult = await waitForAiJob(generated.data.jobId);
+    assert.ok(generatedResult.recipe.title);
+    assert.ok(generatedResult.recipe.ingredients.length >= 3);
+    assert.ok(generatedResult.recipe.steps.length >= 2);
+
+    const saved = await call('/api/recipes', {
+      method: 'POST',
+      body: {
+        title: generatedResult.recipe.title,
+        description: generatedResult.recipe.description,
+        category: generatedResult.recipe.category,
+        servings: generatedResult.recipe.servings,
+        prepMinutes: generatedResult.recipe.prepMinutes,
+        notes: generatedResult.recipe.steps.map((stepText, index) => `${index + 1}. ${stepText}`).join('\n'),
+        ingredients: generatedResult.recipe.ingredients,
+        source: 'ai',
+        sourcePrompt: 'test automatico',
+      },
+    });
+    assert.equal(saved.status, 201);
+    assert.equal(saved.data.recipe.source, 'ai');
+
+    await new Promise((resolve) => setTimeout(resolve, 2600));
+    const similar = await call('/api/ai/recipes/generate', {
+      method: 'POST',
+      body: { mode: 'similar', seed: generatedResult.recipe, servings: 2 },
+    });
+    assert.equal(similar.status, 202, JSON.stringify(similar.data));
+    const similarResult = await waitForAiJob(similar.data.jobId);
+    assert.ok(similarResult.recipe.title);
+
+    await call(`/api/recipes/${saved.data.recipe.id}`, { method: 'DELETE' });
   });
 
   await step('pianta: creazione, cura, diario', async () => {

@@ -90,7 +90,7 @@ Formato errore:
 | --- | --- | --- |
 | GET | `/api/recipes` | Con conteggio ingredienti e prima foto. |
 | GET | `/api/recipes/:id` | Ingredienti completi e allegati. |
-| POST | `/api/recipes` | `{ title, category?, servings?, prepMinutes?, description?, notes?, ingredients[] }` |
+| POST | `/api/recipes` | `{ title, category?, servings?, prepMinutes?, description?, notes?, ingredients[], source?, sourcePrompt? }` |
 | PATCH | `/api/recipes/:id` | Se `ingredients` è presente, sostituisce l’elenco. |
 | DELETE | `/api/recipes/:id` | |
 | POST | `/api/recipes/:id/favorite` | Inverte il preferito. |
@@ -111,6 +111,46 @@ Formato errore:
 | POST | `/api/plants/:id/tasks/:taskId/done` | `{ doneAt?, note? }`; aggiorna prossima data e diario. |
 
 Tipi attività: `acqua`, `concime`, `potatura`, `rinvaso`, `controllo`.
+
+## Ricette con AI
+
+| Metodo | Percorso | Note |
+| --- | --- | --- |
+| GET | `/api/ai/status` | Modello, endpoint e disponibilità (nessuna chiave esposta). |
+| POST | `/api/ai/recipes/generate` | Avvia la generazione e restituisce subito un `jobId` (HTTP 202). |
+| GET | `/api/ai/recipes/jobs/:id` | Stato del lavoro: `running`, `done` con `result`, oppure `error`. |
+| POST | `/api/settings/test-ai` | Solo admin. Verifica l’endpoint `/models` del provider. |
+
+La generazione è **asincrona** per non superare i timeout dei proxy (Cloudflare chiude le richieste a 100 secondi) e per permettere ai modelli locali di prendersi il loro tempo. Il client fa polling ogni 1,4 secondi.
+
+Richiesta di generazione:
+
+```json
+{
+  "mode": "new",
+  "prompt": "ho zucchine e pasta, qualcosa di veloce",
+  "servings": 2,
+  "maxMinutes": 30,
+  "category": "Primi",
+  "vegetarian": false,
+  "avoid": "frutta a guscio",
+  "seed": {
+    "title": "Pasta alle zucchine",
+    "description": "…",
+    "category": "Primi",
+    "servings": 2,
+    "ingredients": [{ "name": "Zucchine", "quantity": "2", "unit": "pz" }],
+    "steps": ["…"]
+  }
+}
+```
+
+- `mode`: `new` oppure `similar`. Con `similar` serve `seed`.
+- Risposta immediata: `{ "jobId": "uuid", "status": "running" }`.
+- Il risultato contiene `recipe` (bozza) e `meta` (modello, durata, JSON mode). La bozza si salva con il normale `POST /api/recipes`, passando `source: "ai"` e `sourcePrompt`.
+- I lavori restano in memoria per 15 minuti e sono visibili solo a chi li ha avviati.
+- Limiti in memoria: 1 richiesta ogni 2,5 secondi e 40 per utente all’ora.
+- Errori tipici: `503 ai_not_configured`, `502 ai_unreachable` (provider spento o modello in caricamento), `502 ai_bad_json`, `429 ai_throttle`.
 
 ## Allegati
 

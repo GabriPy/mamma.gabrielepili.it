@@ -6,8 +6,7 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { rateLimit } from 'express-rate-limit';
 import multer from 'multer';
-import { config, smtpConfigured } from './config.js';
-import { authMiddleware } from './auth.js';
+import { config, smtpConfigured } from './config.js';import { authMiddleware } from './auth.js';
 import { HttpError } from './lib/http.js';
 import { db } from './db.js';
 import { authRouter } from './routes/auth.js';
@@ -22,6 +21,7 @@ import { dashboardRouter } from './routes/dashboard.js';
 import { searchRouter } from './routes/search.js';
 import { settingsRouter } from './routes/settings.js';
 import { backupRouter } from './routes/backup.js';
+import { aiRouter } from './routes/ai.js';
 
 export function createApp() {
   const app = express();
@@ -120,6 +120,7 @@ export function createApp() {
   app.use('/api/search', searchRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api/backup', backupRouter);
+  app.use('/api/ai', aiRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Endpoint non trovato.', code: 'not_found' });

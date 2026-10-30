@@ -1,0 +1,57 @@
+name: ghibiri-home
+
+# Profilo opzionale: modello AI locale per le ricette.
+# Uso:
+#   docker compose -f docker-compose.yml -f docker-compose.local-ai.yml up -d --build
+#
+# L'app viene configurata automaticamente per parlare con il container "local-ai".
+# Nessuna porta è pubblicata: il modello è raggiungibile solo dalla rete Docker.
+
+services:
+  ghibiri-home:
+    environment:
+      AI_BASE_URL: http://local-ai:8080/v1
+      AI_MODEL: ghibiri-local
+      AI_API_KEY: ""
+      AI_TIMEOUT_MS: 180000
+      AI_MAX_TOKENS: 1200
+      AI_JSON_MODE: schema
+      AI_TEMPERATURE: 0.7
+    depends_on:
+      - local-ai
+
+  local-ai:
+    build:
+      context: ./docker/ai
+      dockerfile: Dockerfile
+      args:
+        MODEL_URL: ${LOCAL_AI_MODEL_URL:-https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf}
+    image: ghibiri-local-ai:qwen2.5-0.5b
+    container_name: ghibiri-local-ai
+    restart: unless-stopped
+    command:
+      - "-m"
+      - "/models/model.gguf"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8080"
+      - "--alias"
+      - "ghibiri-local"
+      - "--ctx-size"
+      - "4096"
+      - "--threads"
+      - "${LOCAL_AI_THREADS:-2}"
+      - "--parallel"
+      - "1"
+      - "--jinja"
+      - "--no-warmup"
+    mem_limit: 1000m
+    cpus: 2.0
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"

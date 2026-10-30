@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '@/api.js';
+import { useMetaStore } from '@/stores/meta.js';
 import { useUiStore } from '@/stores/ui.js';
 import { RECIPE_CATEGORIES } from '@/utils/constants.js';
 import PageHeader from '@/components/PageHeader.vue';
@@ -11,6 +12,7 @@ import EmptyState from '@/components/EmptyState.vue';
 import Icon from '@/components/Icon.vue';
 
 const ui = useUiStore();
+const meta = useMetaStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -146,7 +148,8 @@ function surprise() {
   router.push(`/ricette/${recipe.id}`);
 }
 
-onMounted(async () => {
+async function loadRecipes(showLoading = false) {
+  if (showLoading) loading.value = true;
   try {
     const data = await api('/api/recipes');
     recipes.value = data.recipes;
@@ -155,14 +158,26 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+}
+
+onMounted(async () => {
+  await loadRecipes(true);
   if (route.query.nuovo === '1') openNew();
 });
+
+watch(
+  () => ui.recipesVersion,
+  () => loadRecipes(false),
+);
 </script>
 
 <template>
   <div class="page-stack">
     <PageHeader eyebrow="Cucina" title="Ricettario" :subtitle="`${recipes.length} ricette di casa, da rifare insieme.`">
       <template #actions>
+        <button v-if="meta.aiEnabled" type="button" class="btn btn-soft" @click="ui.openGenerator()">
+          <Icon name="sparkle" :size="16" /> Genera con AI
+        </button>
         <button type="button" class="btn btn-ghost" :disabled="!recipes.length" @click="surprise">
           <Icon name="sparkle" :size="16" /> Sorprendimi
         </button>
@@ -228,6 +243,7 @@ onMounted(async () => {
           >
             <Icon name="heart" :size="17" :filled="recipe.favorite" />
           </button>
+          <span v-if="recipe.source === 'ai'" class="ai-badge"><Icon name="sparkle" :size="10" /> AI</span>
           <span class="recipe-cat">{{ recipe.category }}</span>
         </div>
         <div class="recipe-body">
@@ -450,6 +466,22 @@ onMounted(async () => {
   color: var(--ink-soft);
   padding: 3px 7px;
   border-radius: 5px;
+}
+.ai-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  background: rgba(255, 253, 249, 0.9);
+  color: var(--rose);
+  padding: 3px 6px;
+  border-radius: 5px;
+  backdrop-filter: blur(4px);
 }
 .recipe-body {
   padding: 15px 16px 16px;

@@ -8,6 +8,9 @@ export const useUiStore = defineStore('ui', {
     toasts: [],
     confirmState: null,
     searchOpen: false,
+    generatorOpen: false,
+    generatorSeed: null,
+    recipesVersion: 0,
   }),
   actions: {
     toast(message, type = 'success', duration = 3800) {
@@ -58,6 +61,17 @@ export const useUiStore = defineStore('ui', {
     },
     closeSearch() {
       this.searchOpen = false;
+    },
+    openGenerator(seed = null) {
+      this.generatorSeed = seed;
+      this.generatorOpen = true;
+    },
+    closeGenerator() {
+      this.generatorOpen = false;
+      this.generatorSeed = null;
+    },
+    markRecipesChanged() {
+      this.recipesVersion += 1;
     },
   },
 });

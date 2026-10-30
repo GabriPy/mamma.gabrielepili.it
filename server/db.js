@@ -107,6 +107,8 @@ CREATE TABLE IF NOT EXISTS recipes (
   category TEXT NOT NULL DEFAULT 'Primi',
   notes TEXT,
   favorite INTEGER NOT NULL DEFAULT 0,
+  source TEXT NOT NULL DEFAULT 'manual',
+  source_prompt TEXT,
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -204,7 +206,16 @@ CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
 `;
 
 db.exec(SCHEMA);
-db.pragma('user_version = 1');
+
+// Migrazioni idempotenti per database creati con versioni precedenti.
+const recipeColumns = new Set(db.pragma('table_info(recipes)').map((column) => column.name));
+if (!recipeColumns.has('source')) {
+  db.exec("ALTER TABLE recipes ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'");
+}
+if (!recipeColumns.has('source_prompt')) {
+  db.exec('ALTER TABLE recipes ADD COLUMN source_prompt TEXT');
+}
+db.pragma('user_version = 2');
 
 export const nowIso = () => new Date().toISOString();
 

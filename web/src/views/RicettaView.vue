@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '@/api.js';
+import { useMetaStore } from '@/stores/meta.js';
 import { useUiStore } from '@/stores/ui.js';
 import { RECIPE_CATEGORIES } from '@/utils/constants.js';
 import BaseModal from '@/components/BaseModal.vue';
@@ -12,6 +13,7 @@ import Icon from '@/components/Icon.vue';
 const props = defineProps({ id: { type: String, required: true } });
 const router = useRouter();
 const ui = useUiStore();
+const meta = useMetaStore();
 
 const recipe = ref(null);
 const loading = ref(true);
@@ -162,8 +164,17 @@ function procedureLines(text) {
   return String(text || '')
     .split('\n')
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter((line) => line && !/^consiglio:/i.test(line));
 }
+
+const tipText = computed(() =>
+  String(recipe.value?.notes || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^consiglio:/i.test(line))
+    .map((line) => line.replace(/^consiglio:\s*/i, ''))
+    .join(' '),
+);
 
 onMounted(load);
 </script>
@@ -178,6 +189,9 @@ onMounted(load);
         <button type="button" class="btn btn-ghost btn-sm" :class="{ 'fav-on': recipe.favorite }" @click="toggleFavorite">
           <Icon name="heart" :size="15" :filled="recipe.favorite" />
           {{ recipe.favorite ? 'Preferita' : 'Preferiti' }}
+        </button>
+        <button v-if="meta.aiEnabled" type="button" class="btn btn-ghost btn-sm" @click="ui.openGenerator(recipe)">
+          <Icon name="sparkle" :size="15" /> Genera una simile
         </button>
         <button type="button" class="btn btn-ghost btn-sm" @click="openEdit">
           <Icon name="edit" :size="15" /> Modifica
@@ -197,7 +211,10 @@ onMounted(load);
           </button>
         </div>
         <div class="hero-content">
-          <p class="eyebrow">{{ recipe.category }}</p>
+          <p class="eyebrow">
+            {{ recipe.category }}
+            <span v-if="recipe.source === 'ai'" class="badge badge-rose hero-ai"><Icon name="sparkle" :size="10" /> generata con AI</span>
+          </p>
           <h1>{{ recipe.title }}</h1>
           <p v-if="recipe.description" class="hero-desc">{{ recipe.description }}</p>
 
@@ -265,6 +282,7 @@ onMounted(load);
             </p>
           </div>
           <p v-else class="muted small">Nessun procedimento ancora scritto.</p>
+          <p v-if="tipText" class="recipe-tip"><Icon name="sparkle" :size="15" /> {{ tipText }}</p>
         </section>
       </div>
 
@@ -443,6 +461,13 @@ onMounted(load);
   line-height: 1.06;
   margin: 8px 0 10px;
 }
+.hero-ai {
+  margin-left: 7px;
+  vertical-align: middle;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 600;
+}
 .hero-desc {
   font-size: 14px;
   color: var(--muted);
@@ -549,6 +574,19 @@ onMounted(load);
   color: var(--primary);
   flex: none;
   margin-top: 1px;
+}
+.recipe-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 16px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: var(--gold-soft);
+  border: 1px solid rgba(184, 131, 58, 0.28);
+  color: #7a5a25;
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 .danger-zone {
   display: flex;

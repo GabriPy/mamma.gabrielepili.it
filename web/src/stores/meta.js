@@ -12,6 +12,9 @@ export const useMetaStore = defineStore('meta', {
     plantReminders: true,
     maxUploadMb: 15,
     appUrl: '',
+    aiEnabled: false,
+    aiModel: null,
+    aiLocal: false,
   }),
   actions: {
     async load(force = false) {

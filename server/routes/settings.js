@@ -8,6 +8,7 @@ import { HttpError, validate } from '../lib/http.js';
 import { mailStatus, sendTestEmail } from '../mailer.js';
 import { dirSize } from '../uploads.js';
 import { processDueReminders, refreshRecurringEvents, syncDeadlineReminders, syncEventReminders, syncPlantTaskReminders } from '../reminders.js';
+import { aiStatus, checkProvider } from '../ai.js';
 
 export const settingsRouter = Router();
 
@@ -59,6 +60,9 @@ settingsRouter.get('/public', requireAuth, (_req, res) => {
     plantReminders: getSetting('plant_reminders', 'true') === 'true',
     maxUploadMb: config.maxUploadMb,
     appUrl: config.appUrl,
+    aiEnabled: aiStatus().configured,
+    aiModel: aiStatus().model,
+    aiLocal: aiStatus().local,
   });
 });
 
@@ -88,6 +92,7 @@ settingsRouter.get('/', requireAdmin, (_req, res) => {
     reminderStats: { sent: sentCount, failed: failedCount },
     lastBackupAt: lastBackup?.created_at || null,
     maxUploadMb: config.maxUploadMb,
+    ai: aiStatus(),
     app: { version: process.env.APP_VERSION || '1.0.0', appUrl: config.appUrl, timezone: config.timezone },
   });
 });
@@ -127,6 +132,12 @@ settingsRouter.post('/test-email', requireAdmin, async (req, res) => {
 settingsRouter.post('/run-reminders', requireAdmin, async (req, res) => {
   const stats = await processDueReminders({ force: true });
   res.json({ stats, mail: mailStatus() });
+});
+
+settingsRouter.post('/test-ai', requireAdmin, async (req, res) => {
+  const result = await checkProvider();
+  audit(req.user.id, 'test_ai', null, null, { model: aiStatus().model });
+  res.json(result);
 });
 
 settingsRouter.post('/resync-reminders', requireAdmin, (req, res) => {

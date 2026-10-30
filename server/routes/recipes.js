@@ -24,6 +24,8 @@ const recipeSchema = z.object({
   category: z.string().trim().max(40).optional().default('Primi'),
   notes: z.string().max(5000).nullish(),
   ingredients: z.array(ingredientSchema).max(60).optional().default([]),
+  source: z.enum(['manual', 'ai']).optional().default('manual'),
+  sourcePrompt: z.string().max(1500).nullish(),
 });
 
 function ingredientsFor(recipeId) {
@@ -102,8 +104,8 @@ recipesRouter.post('/', (req, res) => {
   const create = db.transaction(() => {
     const info = db
       .prepare(
-        `INSERT INTO recipes (title, description, servings, prep_minutes, category, notes, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO recipes (title, description, servings, prep_minutes, category, notes, source, source_prompt, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         body.title,
@@ -112,6 +114,8 @@ recipesRouter.post('/', (req, res) => {
         body.prepMinutes === '' || body.prepMinutes === null || body.prepMinutes === undefined ? null : body.prepMinutes,
         body.category,
         cleanText(body.notes, 5000),
+        body.source || 'manual',
+        cleanText(body.sourcePrompt, 1500),
         req.user.id,
         now,
         now,
@@ -125,7 +129,7 @@ recipesRouter.post('/', (req, res) => {
     return info.lastInsertRowid;
   });
   const id = create();
-  audit(req.user.id, 'create_recipe', 'recipe', id, { title: body.title });
+  audit(req.user.id, 'create_recipe', 'recipe', id, { title: body.title, source: body.source || 'manual' });
   const row = getRecipe(id);
   res.status(201).json({ recipe: recipeOut(row, { ingredients: ingredientsFor(id), attachments: [] }) });
 });

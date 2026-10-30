@@ -8,6 +8,7 @@ import BrandMark from './BrandMark.vue';
 import Avatar from './Avatar.vue';
 import Icon from './Icon.vue';
 import SearchOverlay from './SearchOverlay.vue';
+import RecipeGenerator from './RecipeGenerator.vue';
 
 const auth = useAuthStore();
 const meta = useMetaStore();
@@ -200,6 +201,7 @@ onBeforeUnmount(() => {
     </nav>
 
     <SearchOverlay />
+    <RecipeGenerator />
 
     <Teleport to="body">
       <Transition name="sheet">

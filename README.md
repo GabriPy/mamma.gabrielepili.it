@@ -14,7 +14,7 @@ Servizio web self-hosted per **mamma.gabrielepili.it**, dockerizzato, con login 
 | **Spesa** | Più liste (casa, festa, mare), reparti, quantità, spunta, pulizia dei completati. Un prodotto già presente non viene duplicato. |
 | **Calendario** | Vista mensile, eventi con ora/luogo/categoria, ricorrenze (giorno, settimana, mese, anno), promemoria email. |
 | **Scadenze** | Bollette, documenti, veicoli, casa. Importo, note, ricorrenza mensile/annuale, “fatto” con avanzamento automatico. |
-| **Ricette** | Ingredienti, porzioni, tempo, procedimento a step, foto, preferiti e **“aggiungi ingredienti alla spesa”**. |
+| **Ricette** | Ingredienti, porzioni, tempo, procedimento a step, foto, preferiti, **“aggiungi ingredienti alla spesa”** e **generazione con AI** (locale o provider esterno). |
 | **Piante** | Schede con foto, attività ricorrenti (acqua, concime, potatura, rinvaso, controllo), diario delle cure. |
 | **Foto e allegati** | Immagini, PDF e documenti Word su eventi, scadenze, ricette e piante, protetti da login. |
 | **Famiglia** | Profili separati con PIN di 4 cifre, ruoli amministratore/famiglia, dati condivisi o privati. |
@@ -100,6 +100,42 @@ Verifica da **Impostazioni → Email e promemoria → Invia email di prova**.
 La coda mostra i prossimi invii. Se cambi orari o giorni di preavviso, i promemoria vengono rigenerati automaticamente. Se SMTP non è configurato la coda resta ferma e nessuna email viene persa.
 
 Orari e fuso: tutte le date sono intese in **Europe/Rome**; l’ora dei promemoria è configurabile (default `09:00`).
+
+---
+
+## Generare ricette con l’AI
+
+Nel ricettario trovi **Genera con AI**: scrivi cosa hai in casa, l’app prepara un’anteprima con ingredienti e procedimento. Puoi aggiungerla al ricettario, generarne un’altra o generare una **simile** (anche partendo da una ricetta esistente). Le ricette salvate portano il badge AI e restano normali ricette, con foto e “aggiungi alla spesa”.
+
+Ci sono due strade.
+
+### Modello locale (consigliato: nessuna quota, nessun dato in uscita)
+
+Un container separato con llama.cpp e **Qwen2.5 0.5B Instruct** quantizzato (~400 MB):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local-ai.yml up -d --build
+```
+
+La prima build scarica il modello; poi funziona anche offline. Il modello è raggiungibile solo dalla rete Docker, non da Internet. Su un Radxa da 2 GB è la scelta sicura: serve circa 1 GB di RAM libera e 2 core. Le generazioni richiedono circa 20–60 secondi.
+
+> Un modello da 0,5B è volutamente leggero: scrive ricette semplici, ma può essere ripetitivo o sbagliare tempi e quantità. Controlla sempre cottura e allergeni. Se vuoi più qualità, passa a un modello 1,5B (più RAM) o a un provider esterno.
+
+Guida completa, cambio modello e troubleshooting: [`docs/AI-LOCALE.md`](docs/AI-LOCALE.md).
+
+### Provider esterno compatibile OpenAI
+
+Nel `.env`:
+
+```dotenv
+AI_BASE_URL=https://api.openai.com/v1
+AI_MODEL=gpt-4o-mini
+AI_API_KEY=sk-...
+```
+
+Funziona anche con OpenRouter, Groq o un Ollama su un altro computer (`http://IP:11434/v1`). La chiave resta nel `.env`, non viene inviata al browser e non finisce nei backup. Con un provider esterno la richiesta esce dal server.
+
+Se l’AI non è configurata, il pulsante “Genera con AI” resta nascosto e in **Impostazioni → Ricette AI** trovi stato, verifica connessione e istruzioni.
 
 ---
 
@@ -269,11 +305,13 @@ I test UI presuppongono i dati demo e il PIN `1234`; servono come verifica local
 │       ├── stores/         auth, impostazioni, UI
 │       └── assets/         design system
 ├── docker/entrypoint.sh    permessi /data e drop a utente node
+├── docker/ai/              immagine llama.cpp + modello locale (opzionale)
 ├── docker-compose.yml      servizio principale
+├── docker-compose.local-ai.yml
 ├── docker-compose.tunnel.yml
 ├── Dockerfile              build frontend + runtime
 ├── data/                   database e uploads (volume, non committare)
-└── docs/                   decisioni, API, tunnel
+└── docs/                   decisioni, API, tunnel, AI locale
 ```
 
 ---

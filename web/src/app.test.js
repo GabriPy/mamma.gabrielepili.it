@@ -168,6 +168,57 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     expect(document.body.textContent).toContain(plant.name);
   }, 20000);
 
+  it('apre il generatore di ricette AI (se configurato)', async () => {
+    const { useMetaStore } = await import('./stores/meta.js');
+    const { useUiStore } = await import('./stores/ui.js');
+    const meta = useMetaStore();
+    if (!meta.aiEnabled) return;
+    const ui = useUiStore();
+    ui.openGenerator();
+    await settle(350);
+    expect(document.body.textContent).toContain('Cosa hai in casa');
+    expect(document.body.textContent).toContain('Allergie o ingredienti da evitare');
+    ui.closeGenerator();
+    await settle(150);
+  });
+
+  it('genera e salva una ricetta dalla modale AI', async () => {
+    const { useMetaStore } = await import('./stores/meta.js');
+    const { useUiStore } = await import('./stores/ui.js');
+    const { api } = await import('./api.js');
+    const meta = useMetaStore();
+    if (!meta.aiEnabled) return;
+    const ui = useUiStore();
+
+    ui.openGenerator();
+    await settle(400);
+    const textarea = document.querySelector('#ai-prompt');
+    expect(textarea).toBeTruthy();
+    textarea.value = 'Ho delle zucchine e della pasta, qualcosa di veloce';
+    textarea.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await settle(100);
+
+    const generate = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Genera');
+    expect(generate, 'pulsante Genera non trovato').toBeTruthy();
+    generate.click();
+    await settle(2800);
+    expect(document.body.textContent).toContain('Aggiungi al ricettario');
+
+    const save = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Aggiungi al ricettario'));
+    expect(save).toBeTruthy();
+    save.click();
+    await settle(1400);
+    expect(document.body.textContent).toContain('Ricetta salvata');
+    ui.closeGenerator();
+    await settle(200);
+
+    // Pulizia: rimuove le ricette create da questo test.
+    const list = await api('/api/recipes');
+    for (const recipe of list.recipes.filter((item) => item.source === 'ai' && item.title === 'Pasta alle zucchine')) {
+      await api(`/api/recipes/${recipe.id}`, { method: 'DELETE' });
+    }
+  });
+
   it('non produce warning Vue', () => {
     const relevant = warnings.filter((w) => !w.includes('Failed to resolve component'));
     expect(relevant, relevant.join('\n')).toEqual([]);

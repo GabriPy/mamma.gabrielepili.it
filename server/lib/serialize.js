@@ -98,6 +98,8 @@ export function recipeOut(row, { ingredients = null, attachments = [] } = {}) {
     category: row.category,
     notes: row.notes,
     favorite: Boolean(row.favorite),
+    source: row.source || 'manual',
+    sourcePrompt: row.source_prompt || null,
     createdBy: userLite(row.created_by),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

@@ -21,6 +21,7 @@ const data = ref(null);
 const users = ref([]);
 const savingSettings = ref(false);
 const testing = ref(false);
+const testingAi = ref(false);
 const exporting = ref(false);
 const running = ref(false);
 const resyncing = ref(false);
@@ -69,6 +70,7 @@ const tabs = [
   { id: 'casa', label: 'Casa', icon: 'home' },
   { id: 'famiglia', label: 'Famiglia', icon: 'users' },
   { id: 'email', label: 'Email e promemoria', icon: 'mail' },
+  { id: 'ai', label: 'Ricette AI', icon: 'sparkle' },
   { id: 'backup', label: 'Backup', icon: 'database' },
 ];
 
@@ -138,6 +140,20 @@ async function testEmail() {
     ui.error(err.message);
   } finally {
     testing.value = false;
+  }
+}
+
+async function testAi() {
+  testingAi.value = true;
+  try {
+    const result = await api('/api/settings/test-ai', { method: 'POST', body: {} });
+    const note = result.modelAvailable === false ? ' Il modello indicato non risulta nell’elenco del provider.' : '';
+    ui.success(`Connessione AI riuscita in ${Math.max(1, Math.round(result.elapsedMs))} ms.${note}`);
+    await load();
+  } catch (err) {
+    ui.error(err.message);
+  } finally {
+    testingAi.value = false;
   }
 }
 
@@ -501,6 +517,106 @@ onMounted(load);
         </div>
       </section>
 
+      <section v-if="tab === 'ai'" class="page-stack">
+        <div class="card" :class="data.ai.configured ? 'card-sage' : 'card-gold'">
+          <header class="card-head">
+            <div>
+              <p class="eyebrow">Ricette con AI</p>
+              <h2>{{ data.ai.configured ? 'Generazione pronta' : 'Generazione da configurare' }}</h2>
+              <p class="card-note">
+                {{ data.ai.configured ? 'Dal ricettario puoi generare una ricetta nuova o una variante di una esistente.' : 'Scegli un modello locale oppure un provider esterno compatibile OpenAI.' }}
+              </p>
+            </div>
+            <span class="badge" :class="data.ai.configured ? 'badge-sage' : 'badge-gold'">
+              {{ data.ai.configured ? 'attiva' : 'non attiva' }}
+            </span>
+          </header>
+
+          <div class="mail-stats">
+            <div class="mail-stat">
+              <strong>{{ data.ai.model || '—' }}</strong>
+              <span>modello</span>
+            </div>
+            <div class="mail-stat">
+              <strong>{{ data.ai.baseUrl ? data.ai.baseUrl.replace(/^https?:\/\//, '') : '—' }}</strong>
+              <span>endpoint</span>
+            </div>
+            <div class="mail-stat">
+              <strong>{{ data.ai.keySet ? 'sì' : 'no' }}</strong>
+              <span>chiave API</span>
+            </div>
+            <div class="mail-stat">
+              <strong>{{ Math.round((data.ai.timeoutMs || 0) / 1000) }}s</strong>
+              <span>timeout</span>
+            </div>
+          </div>
+
+          <div class="settings-foot">
+            <RouterLink to="/ricette" class="btn btn-ghost btn-sm">
+              <Icon name="book" :size="15" /> Apri il ricettario
+            </RouterLink>
+            <button type="button" class="btn btn-primary" :disabled="!data.ai.configured || testingAi" @click="testAi">
+              <span v-if="testingAi" class="spinner" />
+              <Icon v-else name="wifi" :size="16" /> Verifica connessione
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <header class="card-head">
+            <div>
+              <p class="eyebrow">Consigliato su questo server</p>
+              <h2>Modello locale, senza quote</h2>
+              <p class="card-note">Un modello piccolo gira in un container separato: niente API esterne, niente costi per ricetta.</p>
+            </div>
+            <span class="badge badge-sage">privato</span>
+          </header>
+
+          <p class="backup-text">
+            Il modello predefinito è <strong>Qwen2.5 0.5B Instruct</strong> quantizzato Q4: circa 400 MB su disco e un
+            consumo contenuto. Per le ricette è sufficiente, ma non aspettarti la creatività di un modello grande:
+            controlla sempre cottura e allergie. Con 2 GB di RAM è la scelta sicura.
+          </p>
+
+          <p class="model-label">Sul server, dalla cartella del progetto:</p>
+          <pre class="code-block">docker compose -f docker-compose.yml -f docker-compose.local-ai.yml up -d --build</pre>
+          <p class="hint">
+            La prima build scarica il modello (circa 400 MB). La prima generazione può richiedere 30–60 secondi mentre
+            il modello si carica; le successive sono più rapide.
+          </p>
+
+          <div class="panel-note" style="margin-top: 14px">
+            <Icon name="info" :size="15" /> Per un modello più capace puoi impostare <code>LOCAL_AI_MODEL_URL</code> nel
+            <code>.env</code> (es. Qwen2.5 1.5B, circa 1 GB) e alzare la memoria del container AI; su un Radxa da 2 GB
+            però rischi lo swap. La guida completa è in <code>docs/AI-LOCALE.md</code>.
+          </div>
+        </div>
+
+        <div class="card">
+          <header class="card-head">
+            <div>
+              <p class="eyebrow">Alternativa</p>
+              <h2>Provider esterno</h2>
+              <p class="card-note">OpenAI e compatibili: OpenAI, OpenRouter, Groq, Ollama su un altro computer.</p>
+            </div>
+          </header>
+          <p class="backup-text">Aggiungi al <code>.env</code> e riavvia con <code>docker compose up -d</code>:</p>
+          <pre class="code-block">AI_BASE_URL=https://api.openai.com/v1
+AI_MODEL=gpt-4o-mini
+AI_API_KEY=sk-...</pre>
+          <div class="provider-list">
+            <div><strong>OpenAI</strong><code>https://api.openai.com/v1</code></div>
+            <div><strong>OpenRouter</strong><code>https://openrouter.ai/api/v1</code></div>
+            <div><strong>Groq</strong><code>https://api.groq.com/openai/v1</code></div>
+            <div><strong>Ollama in LAN</strong><code>http://IP-DEL-PC:11434/v1</code></div>
+          </div>
+          <p class="hint" style="margin-top: 12px">
+            Con un provider esterno la richiesta esce dal server: non inserire dati personali sensibili. La chiave resta
+            nel <code>.env</code>, non viene mai inviata al browser e non finisce nei backup.
+          </p>
+        </div>
+      </section>
+
       <section v-if="tab === 'backup'" class="page-stack">
         <div class="card card-terracotta">
           <header class="card-head">
@@ -624,6 +740,13 @@ onMounted(load);
 .settings-page {
   max-width: 940px;
 }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  background: rgba(43, 38, 32, 0.06);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -742,6 +865,51 @@ onMounted(load);
   gap: 10px;
   margin-top: 20px;
   flex-wrap: wrap;
+}
+.model-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: 16px 0 8px;
+}
+.code-block {
+  margin: 0;
+  padding: 13px 15px;
+  background: #2f2822;
+  color: #f4e9d8;
+  border-radius: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.provider-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.provider-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.provider-list strong {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.provider-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--muted);
+  word-break: break-all;
 }
 .storage-grid {
   display: grid;

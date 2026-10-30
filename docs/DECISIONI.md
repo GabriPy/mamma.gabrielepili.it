@@ -174,3 +174,33 @@ Per un elemento nuovo, l’interfaccia permette di scegliere subito le foto: ven
 - **PIN a 4 cifre**: accettabile solo con HTTPS, rate limiting e, idealmente, Cloudflare Access.
 
 Queste sono scelte, non dimenticanze: ognuna ha un costo di complessità che oggi non è giustificato.
+
+---
+
+## 12. Generazione ricette con AI
+
+**Scelta.** Due modalità, stessa interfaccia:
+
+- **Modello locale opzionale** in un container separato (llama.cpp + Qwen2.5 0.5B Instruct Q4_K_M), attivato con un file Compose aggiuntivo.
+- **Provider esterno** compatibile OpenAI (OpenAI, OpenRouter, Groq, Ollama) configurato da `.env`.
+
+**Perché il modello locale sta in un container separato.**
+
+- L’immagine dell’app resta leggera e senza pesi da centinaia di MB.
+- I limiti di memoria sono separati: un’inferenza pesante non può far riavviare l’app.
+- Chi non vuole l’AI semplicemente non avvia quel servizio.
+- Chi ha un PC più potente può puntare a un Ollama in LAN senza cambiare codice.
+
+**Perché 0,5B.** Sul Radxa da 2 GB un 7B è fuori discussione; un 1,5B è al limite. Qwen2.5 0.5B Q4 occupa ~400 MB su disco e lascia respiro al sistema. È sufficiente per ricette semplici, non per creatività da chef: per questo l’anteprima è sempre modificabile e il salvataggio è esplicito.
+
+**Contromisure.**
+
+- Output vincolato a uno schema JSON (`AI_JSON_MODE=schema` con llama.cpp): un modello piccolo non può “inventarsi” la struttura.
+- Generazione asincrona con polling: i 60–90 secondi di un modello locale non superano il timeout di 100 s di Cloudflare.
+- Validazione server-side della ricetta, normalizzazione di unità e categorie.
+- Limite di 1 generazione ogni 2,5 secondi e 40/ora per utente.
+- Nessun salvataggio automatico: la ricetta entra nel ricettario solo dopo conferma.
+- La chiave API resta nel `.env`; non è mai esposta al browser né inclusa nei backup.
+- La richiesta originale viene salvata solo come metadato (`source_prompt`) per trasparenza.
+
+**Limiti dichiarati.** Il modello locale può essere lento (20–60 s), ripetitivo o impreciso su cotture e quantità. La UI lo dice esplicitamente e invita a controllare. Per qualità superiore servono un modello più grande o un provider esterno.

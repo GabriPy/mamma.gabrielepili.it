@@ -1,0 +1,13 @@
+* text=auto
+
+# File che devono restare con LF anche su Windows: gli script shell non
+# funzionano con CRLF dentro il container.
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker/** text eol=lf
+
+*.js text eol=lf
+*.vue text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
