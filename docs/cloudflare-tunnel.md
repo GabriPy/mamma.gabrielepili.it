@@ -2,7 +2,7 @@
 
 Obiettivo: raggiungere Ghibiri Home da Internet **senza aprire porte sul router**, con HTTPS gestito da Cloudflare.
 
-Il servizio ascolta sulla porta `3080` dell’host (o sulla `3000` del container, se il tunnel gira nello stesso network Docker).
+Il tunnel si configura dalla **dashboard Cloudflare**, ma il connettore `cloudflared` deve girare sul server. In questo progetto **non c’è un container cloudflared**: l’app pubblica solo la porta `3080` e il connettore la raggiunge su `http://localhost:3080`.
 
 ---
 
@@ -10,20 +10,21 @@ Il servizio ascolta sulla porta `3080` dell’host (o sulla `3000` del container
 
 - Dominio `gabrielepili.it` con DNS gestito da Cloudflare (nameserver Cloudflare).
 - Account Cloudflare gratuito.
-- Il container `ghibiri-home` avviato e `healthy`:
+- App avviata e sana:
 
 ```bash
+cd /percorso/ghibiri-home
 docker compose ps
+curl -fsS http://localhost:3080/api/health
 ```
 
 ---
 
-## 2. Creare il tunnel (dashboard)
+## 2. Creare il tunnel dalla dashboard
 
 1. Vai su **Cloudflare Zero Trust → Networks → Tunnels**.
 2. **Create a tunnel** → tipo **Cloudflared** → nome `ghibiri-home`.
-3. Copia il **token** che aparece nella pagina di installazione (una stringa lunga che inizia con `eyJ...`).
-4. Non installare subito il connettore: prima aggiungi il public hostname.
+3. Copia il **token** (stringa lunga che inizia con `eyJ...`).
 
 ### Public hostname
 
@@ -35,126 +36,123 @@ Nella scheda **Public Hostname** del tunnel:
 | Domain | `gabrielepili.it` |
 | Path | *(vuoto)* |
 | Service type | `HTTP` |
-| URL | `ghibiri-home:3000` se cloudflared è in Compose, altrimenti `localhost:3080` |
+| URL | `localhost:3080` |
 
-Cloudflare crea automaticamente il record DNS `mamma.gabrielepili.it` (CNAME del tunnel). Non creare un record A: il traffico passa dal tunnel.
+Cloudflare crea automaticamente il record DNS `mamma.gabrielepili.it` (CNAME del tunnel). Non creare un record A.
 
 ---
 
-## 3. Avviare il connettore
+## 3. Installare il connettore sul server
 
-### Opzione A — cloudflared dentro Docker Compose (consigliata)
+Scegli **una** delle due strade. In entrambi i casi il connettore deve poter raggiungere `localhost:3080`.
 
-Aggiungi il token al `.env`:
+### Opzione A — servizio di sistema (consigliata)
+
+Installa cloudflared sul server (se non c’è già) e registra il servizio con il token:
+
+```bash
+sudo cloudflared service install <TOKEN>
+sudo systemctl status cloudflared
+```
+
+Cloudflare fornisce il comando esatto nella pagina di creazione del tunnel. Il servizio parte al boot e si aggiorna con il pacchetto.
+
+### Opzione B — container separato con rete host
+
+```bash
+docker run -d --name ghibiri-tunnel --restart unless-stopped \
+  --network host cloudflare/cloudflared:latest \
+  tunnel --no-autoupdate run --token <TOKEN>
+```
+
+Con `--network host` il connettore vede `localhost:3080` esattamente come l’host. Su Linux è la soluzione più semplice; non pubblicare altre porte.
+
+> Se non usi `--network host`, il public hostname deve puntare a un indirizzo raggiungibile dal container del tunnel, non a `localhost`. Evita configurazioni ibride: il servizio di sistema è più prevedibile.
+
+---
+
+## 4. Configurare l’app
+
+Nel `.env`:
 
 ```dotenv
-TUNNEL_TOKEN=eyJhIjoi...
 APP_URL=https://mamma.gabrielepili.it
-COOKIE_SECURE=true
+COOKIE_SECURE=
 ```
 
-Avvia entrambi i servizi:
+`COOKIE_SECURE` vuoto lascia che il cookie diventi `Secure` automaticamente quando la richiesta arriva in HTTPS. Poi:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
-docker compose ps
+docker compose up -d
 ```
 
-Il file `docker-compose.tunnel.yml` avvia `cloudflare/cloudflared` con `tunnel run`, in attesa che `ghibiri-home` sia sano. I due container condividono la rete del progetto: per questo il public hostname usa `http://ghibiri-home:3000`.
-
-### Opzione B — cloudflared sull’host
-
-Se hai già cloudflared installato sul server:
-
-```bash
-cloudflared tunnel login
-cloudflared tunnel create ghibiri-home
-```
-
-`~/.cloudflared/config.yml`:
-
-```yaml
-tunnel: <UUID-del-tunnel>
-credentials-file: /root/.cloudflared/<UUID-del-tunnel>.json
-
-ingress:
-  - hostname: mamma.gabrielepili.it
-    service: http://localhost:3080
-  - service: http_status:404
-```
-
-```bash
-cloudflared tunnel route dns ghibiri-home mamma.gabrielepili.it
-sudo systemctl enable --now cloudflared
-```
-
-In questo caso il public hostname nella dashboard non serve (la configurazione è locale), ma puoi gestirlo ugualmente da lì.
+Non c’è nessun `TUNNEL_TOKEN` da mettere nel `.env` dell’app: il token serve solo al connettore.
 
 ---
 
-## 4. Verifica
+## 5. Verifica
+
+Dalla dashboard il tunnel deve risultare **Healthy**. Poi:
 
 ```bash
 curl -I https://mamma.gabrielepili.it/api/health
 ```
 
-Deve rispondere `200` con `{"status":"ok",...}`.
+Deve rispondere `200` con `{"status":"ok",...}`. Apri `https://mamma.gabrielepili.it`: vedi la schermata “Chi sei?”.
 
-Poi apri `https://mamma.gabrielepili.it`: dovresti vedere la schermata “Chi sei?”.
+Se il sito non risponde:
 
-Se il browser mostra un errore 502/1033:
-
-- `docker compose ps` → il container è `healthy`?
-- il public hostname punta alla porta giusta? (`ghibiri-home:3000` oppure `localhost:3080`)
-- i log di cloudflared: `docker compose logs -f cloudflared`
-- il container e cloudflared sono nella stessa rete? Se hai avviato solo `docker-compose.tunnel.yml`, avvia anche il servizio principale.
+- `docker compose ps` → il container app è `healthy`?
+- `curl http://localhost:3080/api/health` → risponde in locale?
+- `sudo systemctl status cloudflared` oppure `docker logs ghibiri-tunnel` → il connettore è connesso?
+- il public hostname punta a `localhost:3080`?
 
 ---
 
-## 5. Impostazioni consigliate su Cloudflare
+## 6. Cloudflare Access (consigliato)
 
-- **SSL/TLS → Overview**: modalità **Full (strict)**. Il certificato di origine è gestito dal tunnel.
-- **SSL/TLS → Edge Certificates**: *Always Use HTTPS* attivo; TLS minimo 1.2; HSTS opzionale (l’app lo invia già quando `COOKIE_SECURE=true`).
-- **Speed → Brotli**: attivo.
-- **Caching**: non mettere in cache `/api/*`; le regole di default di Cloudflare non lo fanno, ma evita Page Rules aggressive.
-- **Limite upload**: il piano gratuito Cloudflare accetta richieste fino a 100 MB. Il limite dell’app è 15 MB per file (`MAX_UPLOAD_MB`), quindi sei coperto.
-
----
-
-## 6. Secondo strato di sicurezza con Cloudflare Access (consigliato)
-
-Un PIN di 4 cifre è comodo ma non è una password. Cloudflare Access aggiunge un’autenticazione (es. codice via email) prima ancora di raggiungere l’app.
+Un PIN di 4 cifre è comodo, non è una password forte. Cloudflare Access aggiunge un secondo strato prima ancora di raggiungere l’app.
 
 1. **Zero Trust → Access → Applications → Add an application → Self-hosted**.
 2. Nome: `Ghibiri Home`; dominio: `mamma.gabrielepili.it`.
-3. Policy: **Allow**, include → *Emails* → gli indirizzi di Gabriele e mamma.
+3. Policy **Allow** con gli indirizzi email della famiglia.
 4. Session duration: 1 mese (o quella che preferisci).
 
-Chi non è nella lista non vede nemmeno la schermata di login. L’app continua a chiedere il PIN: due strati indipendenti.
-
-Nota: Access può interferire con le shortcut PWA e con i link nelle email se la sessione Access è scaduta; è il compromesso per la sicurezza aggiuntiva.
+Chi non è nella lista non vede nemmeno il login. L’app continua a chiedere il PIN.
 
 ---
 
-## 7. Aggiornamenti e manutenzione
+## 7. Aggiornamenti
+
+L’app:
 
 ```bash
-# aggiorna l'app
+cd /percorso/ghibiri-home
 git pull
-docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --build
-
-# aggiorna cloudflared
-docker compose -f docker-compose.yml -f docker-compose.tunnel.yml pull cloudflared
-docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
+docker compose up -d --build
 ```
 
-Il token del tunnel non scade; se lo revochi dalla dashboard, aggiorna `TUNNEL_TOKEN` e riavvia.
+Il connettore:
+
+```bash
+# servizio di sistema
+sudo apt update && sudo apt install --only-upgrade cloudflared
+
+# oppure container
+docker pull cloudflare/cloudflared:latest
+docker rm -f ghibiri-tunnel
+docker run -d --name ghibiri-tunnel --restart unless-stopped \
+  --network host cloudflare/cloudflared:latest \
+  tunnel --no-autoupdate run --token <TOKEN>
+```
+
+Il tunnel e il DNS restano configurati anche mentre l’app è spenta; in quel caso il sito risponde `502` finché non riavvii `ghibiri-home`.
 
 ---
 
 ## 8. Se cambi dominio o sottodominio
 
 1. Aggiungi il nuovo public hostname al tunnel.
-2. Aggiorna `APP_URL` nel `.env` (usato nei link delle email).
-3. Se passi da HTTP a HTTPS, imposta `COOKIE_SECURE=true` e riavvia.
-4. Le sessioni esistenti restano valide (il cookie è per host): gli utenti del vecchio dominio dovranno rientrare.
+2. Aggiorna `APP_URL` nel `.env`.
+3. Riavvia l’app.
+4. Le sessioni esistenti restano valide sul vecchio host; gli utenti del nuovo dominio dovranno rientrare.

@@ -14,7 +14,7 @@ Servizio web self-hosted per **mamma.gabrielepili.it**, dockerizzato, con login 
 | **Spesa** | Più liste (casa, festa, mare), reparti, quantità, spunta, pulizia dei completati. Un prodotto già presente non viene duplicato. |
 | **Calendario** | Vista mensile, eventi con ora/luogo/categoria, ricorrenze (giorno, settimana, mese, anno), promemoria email. |
 | **Scadenze** | Bollette, documenti, veicoli, casa. Importo, note, ricorrenza mensile/annuale, “fatto” con avanzamento automatico. |
-| **Ricette** | Ingredienti, porzioni, tempo, procedimento a step, foto, preferiti, **“aggiungi ingredienti alla spesa”** e **generazione con AI** (locale o provider esterno). |
+| **Ricette** | Ingredienti, porzioni, tempo, procedimento a step, foto, preferiti, **“aggiungi ingredienti alla spesa”** e **generazione con AI** tramite provider compatibile OpenAI. |
 | **Piante** | Schede con foto, attività ricorrenti (acqua, concime, potatura, rinvaso, controllo), diario delle cure. |
 | **Foto e allegati** | Immagini, PDF e documenti Word su eventi, scadenze, ricette e piante, protetti da login. |
 | **Famiglia** | Profili separati con PIN di 4 cifre, ruoli amministratore/famiglia, dati condivisi o privati. |
@@ -37,7 +37,7 @@ Le richieste erano: sottodominio `mamma.gabrielepili.it`, Docker con una porta e
 | Foto/allegati | Disponibili da subito su tutti i moduli | Caricamento immediato per gli elementi esistenti; per un elemento nuovo i file vengono selezionati e caricati subito dopo il salvataggio. |
 | Backup | **Solo manuale**, con pulsante di esportazione | Come richiesto: niente job automatici. L’archivio contiene tutto e le istruzioni per ripristinare. |
 | Promemoria | Email SMTP configurabile | Se SMTP non è configurato, i promemoria restano in coda e partono appena il server email viene attivato. |
-| Deploy | Un container, porta `3080`, volume `./data` | Cloudflare Tunnel punta a `http://localhost:3080` (o a `http://ghibiri-home:3000` se cloudflared è in Compose). Nessuna porta esposta a Internet. |
+| Deploy | Un container, porta `3080`, volume `./data` | Cloudflare Tunnel è configurato dalla dashboard e il connettore `cloudflared` gira fuori da questo progetto, puntando a `http://localhost:3080`. |
 
 Dettagli e alternative scartate: [`docs/DECISIONI.md`](docs/DECISIONI.md).
 
@@ -107,33 +107,29 @@ Orari e fuso: tutte le date sono intese in **Europe/Rome**; l’ora dei promemor
 
 Nel ricettario trovi **Genera con AI**: scrivi cosa hai in casa, l’app prepara un’anteprima con ingredienti e procedimento. Puoi aggiungerla al ricettario, generarne un’altra o generare una **simile** (anche partendo da una ricetta esistente). Le ricette salvate portano il badge AI e restano normali ricette, con foto e “aggiungi alla spesa”.
 
-Ci sono due strade.
+La generazione usa un **provider esterno compatibile OpenAI**. Non c’è un modello locale nel progetto: l’app resta leggera e non scarica modelli.
 
-### Modello locale (consigliato: nessuna quota, nessun dato in uscita)
+### Configurazione consigliata: Groq
 
-Un container separato con llama.cpp e **Qwen2.5 0.5B Instruct** quantizzato (~400 MB):
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.local-ai.yml up -d --build
-```
-
-La prima build scarica il modello; poi funziona anche offline. Il modello è raggiungibile solo dalla rete Docker, non da Internet. Su un Radxa da 2 GB è la scelta sicura: serve circa 1 GB di RAM libera e 2 core. Le generazioni richiedono circa 20–60 secondi.
-
-> Un modello da 0,5B è volutamente leggero: scrive ricette semplici, ma può essere ripetitivo o sbagliare tempi e quantità. Controlla sempre cottura e allergeni. Se vuoi più qualità, passa a un modello 1,5B (più RAM) o a un provider esterno.
-
-Guida completa, cambio modello e troubleshooting: [`docs/AI-LOCALE.md`](docs/AI-LOCALE.md).
-
-### Provider esterno compatibile OpenAI
-
-Nel `.env`:
+Groq è gratuito, veloce e con circa 1.000 richieste al giorno:
 
 ```dotenv
-AI_BASE_URL=https://api.openai.com/v1
-AI_MODEL=gpt-4o-mini
-AI_API_KEY=sk-...
+AI_BASE_URL=https://api.groq.com/openai/v1
+AI_MODEL=openai/gpt-oss-120b
+AI_API_KEY=gsk_...
 ```
 
-Funziona anche con OpenRouter, Groq o un Ollama su un altro computer (`http://IP:11434/v1`). La chiave resta nel `.env`, non viene inviata al browser e non finisce nei backup. Con un provider esterno la richiesta esce dal server.
+### Alternativa: Google Gemini
+
+Qualità italiana migliore. Il piano free può usare i contenuti per migliorare i prodotti Google:
+
+```dotenv
+AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+AI_MODEL=gemini-3.8-flash
+AI_API_KEY=...
+```
+
+Funziona anche con OpenRouter o OpenAI. La chiave resta nel `.env`, non viene inviata al browser e non finisce nei backup. Con un provider esterno la richiesta esce dal server.
 
 Se l’AI non è configurata, il pulsante “Genera con AI” resta nascosto e in **Impostazioni → Ricette AI** trovi stato, verifica connessione e istruzioni.
 
@@ -141,28 +137,38 @@ Se l’AI non è configurata, il pulsante “Genera con AI” resta nascosto e i
 
 ## Cloudflare Tunnel per `mamma.gabrielepili.it`
 
-La guida completa (token, DNS, Access opzionale): [`docs/cloudflare-tunnel.md`](docs/cloudflare-tunnel.md).
+Il tunnel si configura dalla **dashboard Cloudflare** e il connettore `cloudflared` è **fuori da questo progetto**. Va installato sull’host o in un container separato: la dashboard da sola non crea la connessione.
 
-In sintesi, con il tunnel gestito da Cloudflare:
+Nel `.env` dell’app:
 
 ```dotenv
-# .env
-TUNNEL_TOKEN=eyJhIjoi...
 APP_URL=https://mamma.gabrielepili.it
-COOKIE_SECURE=true
+COOKIE_SECURE=
 ```
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
-```
+Il cookie diventa `Secure` automaticamente quando la richiesta arriva in HTTPS.
 
-Nel tunnel, aggiungi un *public hostname*:
+Poi, nella dashboard del tunnel, aggiungi un *public hostname*:
 
 - **Subdomain**: `mamma`
 - **Domain**: `gabrielepili.it`
-- **Service**: `http://ghibiri-home:3000`
+- **Service**: `http://localhost:3080`
 
-Se invece cloudflared gira già sull’host, punta a `http://localhost:3080`. Non serve aprire porte sul router.
+Il connettore può girare come servizio sull’host:
+
+```bash
+sudo cloudflared service install <TOKEN>
+```
+
+oppure in un container separato, con rete host:
+
+```bash
+docker run -d --name ghibiri-tunnel --restart unless-stopped \
+  --network host cloudflare/cloudflared:latest \
+  tunnel --no-autoupdate run --token <TOKEN>
+```
+
+Non serve aprire porte sul router. Guida completa: [`docs/cloudflare-tunnel.md`](docs/cloudflare-tunnel.md).
 
 ---
 
@@ -294,25 +300,25 @@ I test UI presuppongono i dati demo e il PIN `1234`; servono come verifica local
 │   ├── reminders.js        coda promemoria e scheduler
 │   ├── mailer.js           SMTP e template email
 │   ├── uploads.js          file, MIME, pulizia
+│   ├── ai.js               provider AI compatibile OpenAI
 │   └── routes/             auth, users, events, deadlines, shopping,
 │                           recipes, plants, attachments, dashboard,
-│                           search, settings, backup
+│                           search, settings, backup, ai
 ├── web/                    Vue 3 + Vite + Pinia
 │   └── src/
-│       ├── components/     AppShell, modali, uploader, PIN pad…
+│       ├── components/     AppShell, modali, uploader, PIN pad, generatore AI…
 │       ├── views/          Oggi, Spesa, Calendario, Scadenze,
 │       │                   Ricette, Piante, Impostazioni, Profilo
 │       ├── stores/         auth, impostazioni, UI
 │       └── assets/         design system
 ├── docker/entrypoint.sh    permessi /data e drop a utente node
-├── docker/ai/              immagine llama.cpp + modello locale (opzionale)
 ├── docker-compose.yml      servizio principale
-├── docker-compose.local-ai.yml
-├── docker-compose.tunnel.yml
 ├── Dockerfile              build frontend + runtime
 ├── data/                   database e uploads (volume, non committare)
-└── docs/                   decisioni, API, tunnel, AI locale
+└── docs/                   decisioni, API, tunnel
 ```
+
+> Cloudflare Tunnel e il connettore `cloudflared` sono volutamente fuori dal progetto: si configurano dalla dashboard e girano sull’host o in un container separato.
 
 ---
 
@@ -335,7 +341,7 @@ Sono tutte aggiunte possibili senza rifare le fondamenta: il modello dati e le A
 | Sintomo | Cosa controllare |
 | --- | --- |
 | Il browser non apre il sito | `docker compose ps` deve dire `healthy`; la porta è `${APP_PORT}` (default 3080). |
-| Errore 502 dal tunnel | Il public hostname deve puntare a `http://ghibiri-home:3000` (tunnel in Compose) o `http://localhost:3080` (tunnel sull’host). |
+| Errore 502 dal tunnel | Il public hostname deve puntare a `http://localhost:3080` e il connettore `cloudflared` deve essere attivo sull’host (o in un container separato). |
 | Le email non arrivano | SMTP compilato? “Invia email di prova” dà errore? Controlla log, spam, `MAIL_FROM` autorizzato dal provider. |
 | “Troppi tentativi” | Attendi 15 minuti oppure reimposta il PIN con `reset-pin.js`. |
 | Upload rifiutato | Limite `MAX_UPLOAD_MB` (15 MB) e tipi ammessi: immagini, PDF, Word, testo. |

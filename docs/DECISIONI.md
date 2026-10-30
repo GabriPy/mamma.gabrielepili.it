@@ -179,28 +179,28 @@ Queste sono scelte, non dimenticanze: ognuna ha un costo di complessità che ogg
 
 ## 12. Generazione ricette con AI
 
-**Scelta.** Due modalità, stessa interfaccia:
+**Scelta.** Solo **provider esterno compatibile OpenAI**, configurato da `.env` (Groq, Google Gemini, OpenRouter, OpenAI). Nessun modello locale nel progetto.
 
-- **Modello locale opzionale** in un container separato (llama.cpp + Qwen2.5 0.5B Instruct Q4_K_M), attivato con un file Compose aggiuntivo.
-- **Provider esterno** compatibile OpenAI (OpenAI, OpenRouter, Groq, Ollama) configurato da `.env`.
+**Perché niente modello locale.**
 
-**Perché il modello locale sta in un container separato.**
+- L’app resta leggera: niente immagini da centinaia di MB né modelli da scaricare.
+- Su un Radxa da 2 GB un modello utile occuperebbe circa 1 GB e girerebbe lento; il rapporto qualità/risorsa è peggiore di una API gratuita.
+- Chi vuole sperimentare un modello locale può comunque mettere un Ollama su un altro computer e usarlo come endpoint compatibile OpenAI, senza modificare il progetto.
 
-- L’immagine dell’app resta leggera e senza pesi da centinaia di MB.
-- I limiti di memoria sono separati: un’inferenza pesante non può far riavviare l’app.
-- Chi non vuole l’AI semplicemente non avvia quel servizio.
-- Chi ha un PC più potente può puntare a un Ollama in LAN senza cambiare codice.
+**Perché una API esterna.**
 
-**Perché 0,5B.** Sul Radxa da 2 GB un 7B è fuori discussione; un 1,5B è al limite. Qwen2.5 0.5B Q4 occupa ~400 MB su disco e lascia respiro al sistema. È sufficiente per ricette semplici, non per creatività da chef: per questo l’anteprima è sempre modificabile e il salvataggio è esplicito.
+- Modelli grandi (120B o più) con qualità italiana e creatività molto superiori a un 0,5B locale.
+- Nessun carico CPU/RAM sul server della casa.
+- Configurazione di pochi minuti e sostituibile senza toccare il codice.
+- Il piano gratuito di Groq copre abbondantemente l’uso familiare.
 
 **Contromisure.**
 
-- Output vincolato a uno schema JSON (`AI_JSON_MODE=schema` con llama.cpp): un modello piccolo non può “inventarsi” la struttura.
-- Generazione asincrona con polling: i 60–90 secondi di un modello locale non superano il timeout di 100 s di Cloudflare.
-- Validazione server-side della ricetta, normalizzazione di unità e categorie.
+- Generazione asincrona con polling: nessun timeout del proxy anche se il provider impiega.
+- JSON mode, validazione server-side della ricetta, normalizzazione di unità e categorie.
 - Limite di 1 generazione ogni 2,5 secondi e 40/ora per utente.
 - Nessun salvataggio automatico: la ricetta entra nel ricettario solo dopo conferma.
 - La chiave API resta nel `.env`; non è mai esposta al browser né inclusa nei backup.
 - La richiesta originale viene salvata solo come metadato (`source_prompt`) per trasparenza.
 
-**Limiti dichiarati.** Il modello locale può essere lento (20–60 s), ripetitivo o impreciso su cotture e quantità. La UI lo dice esplicitamente e invita a controllare. Per qualità superiore servono un modello più grande o un provider esterno.
+**Limiti dichiarati.** La richiesta esce dal server e viene trattata secondo la policy del provider; il piano free di Gemini può usare i contenuti per migliorare i prodotti Google. Chi vuole che nulla esca di casa deve accettare un modello locale più lento e meno capace, oppure non usare la generazione AI.

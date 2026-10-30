@@ -56,7 +56,7 @@ export const config = {
     timeoutMs: int(process.env.AI_TIMEOUT_MS, 45000),
     maxTokens: int(process.env.AI_MAX_TOKENS, 1600),
     temperature: Number(process.env.AI_TEMPERATURE || 0.85),
-    jsonMode: ['off', 'object', 'schema'].includes(String(process.env.AI_JSON_MODE || '').toLowerCase())
+    jsonMode: ['off', 'object'].includes(String(process.env.AI_JSON_MODE || '').toLowerCase())
       ? String(process.env.AI_JSON_MODE).toLowerCase()
       : 'object',
   },

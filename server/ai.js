@@ -4,36 +4,6 @@ import { HttpError } from './lib/http.js';
 
 const CATEGORIES = ['Primi', 'Secondi', 'Contorni', 'Dolci', 'Colazioni', 'Conserve', 'Altro'];
 
-const RECIPE_JSON_SCHEMA = {
-  type: 'object',
-  properties: {
-    title: { type: 'string' },
-    description: { type: 'string' },
-    category: { type: 'string', enum: CATEGORIES },
-    servings: { type: 'integer', minimum: 1, maximum: 20 },
-    prepMinutes: { type: 'integer', minimum: 0, maximum: 600 },
-    ingredients: {
-      type: 'array',
-      minItems: 3,
-      maxItems: 15,
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          quantity: { type: 'string' },
-          unit: { type: 'string' },
-        },
-        required: ['name', 'quantity', 'unit'],
-        additionalProperties: false,
-      },
-    },
-    steps: { type: 'array', minItems: 3, maxItems: 10, items: { type: 'string' } },
-    tips: { type: 'string' },
-  },
-  required: ['title', 'description', 'category', 'servings', 'prepMinutes', 'ingredients', 'steps', 'tips'],
-  additionalProperties: false,
-};
-
 const SYSTEM_PROMPT = `Sei il cuoco di casa di "Ghibiri Home", una famiglia italiana. Scrivi ricette pratiche, casalinghe e realizzabili con ingredienti comuni.
 
 REGOLE:
@@ -95,7 +65,6 @@ function isLocalProvider() {
     return (
       host === 'localhost' ||
       host === '127.0.0.1' ||
-      host === 'local-ai' ||
       host.startsWith('192.168.') ||
       host.startsWith('10.') ||
       /^172\.(1[6-9]|2\d|3[01])\./.test(host)
@@ -330,7 +299,6 @@ function buildMessages(input) {
 
 function responseFormat() {
   if (config.ai.jsonMode === 'object') return { type: 'json_object' };
-  if (config.ai.jsonMode === 'schema') return { type: 'json_schema', schema: RECIPE_JSON_SCHEMA };
   return null;
 }
 
